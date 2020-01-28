@@ -1,0 +1,94 @@
+apiVersion: apps/v1beta2
+kind: StatefulSet
+metadata:
+  name: p4proxy
+  labels:
+    app: p4proxy
+spec:
+  replicas: 1
+  serviceName: p4proxy
+  selector:
+    matchLabels:
+      app: p4proxy
+  template:
+    metadata:
+      labels:
+        app: p4proxy
+    spec:
+      volumes:
+        - name: p4proxy-cache
+          persistentVolumeClaim:
+              claimName: p4proxy-cache
+      containers:
+        - name: p4proxy
+          image: ripclawffb/perforce-proxy:18.2
+          command: ["p4p"]
+          args: ["-u", "$(P4USER)"]
+          ports:
+            - containerPort: 1666
+          volumeMounts:
+            - mountPath: "/cache"
+              name: p4proxy-cache
+          env:
+            - name: P4TARGET
+              value: perforce:1666
+            - name: P4USER
+              valueFrom:
+                secretKeyRef:
+                  name: p4proxy
+                  key: username
+            - name: P4PASSWD
+              valueFrom:
+                secretKeyRef:
+                  name: p4proxy
+                  key: password
+          readinessProbe:
+            exec:
+              command:
+              - p4
+              - info
+          livenessProbe:
+            exec:
+              command:
+              - p4
+              - info
+        - name: p4proxy-cleanup
+          image: ripclawffb/perforce-proxy:f15ca77e083cad6ceeab3a686ebb1d5b50932347
+          command: [ "/bin/bash", "-c", "--" ]
+          args: ["while true; do p4p_clean.py -l 20 -h 30 /cache; sleep 300; done"]
+          volumeMounts:
+            - mountPath: "/cache"
+              name: p4proxy-cache
+        - name: p4proxy-sync
+          image: ripclawffb/perforce-proxy:cb0ddccea3d447d90bbee1b50dad9f7cd9a92218
+          command: [ "/bin/bash", "-c", "--" ]
+          args: ["while true; do p4_sync.sh //depot/...; sleep 300; done"]
+          volumeMounts:
+            - mountPath: "/cache"
+              name: p4proxy-cache
+          env:
+            - name: P4CHARSET
+              value: utf8
+            - name: P4CLIENT
+              value: dev_p4proxy_client
+            - name: P4USER
+              valueFrom:
+                secretKeyRef:
+                  name: p4proxy
+                  key: username
+            - name: P4PASSWD
+              valueFrom:
+                secretKeyRef:
+                  name: p4proxy
+                  key: password
+  volumeClaimTemplates:
+    - metadata:
+        name: p4proxy-cache
+      spec:
+        accessModes:
+          - ReadWriteMany
+        resources:
+          requests:
+            storage: 8Gi
+        storageClassName: ebs-gp2
+

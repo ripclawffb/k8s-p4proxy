@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: p4proxy
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-internal: 0.0.0.0/0
+    service.beta.kubernetes.io/aws-load-balancer-backend-protocol: tcp
+spec:
+  selector:
+    app: p4proxy
+  ports:
+    - protocol: TCP
+      port: 1666
+      targetPort: 1666
+  type: LoadBalancer
